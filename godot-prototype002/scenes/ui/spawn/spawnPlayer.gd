@@ -17,8 +17,8 @@ func _ready():
 
 func _on_button_pressed():
 	if %nameInput.text != "":
-		var player_class := CLASS_LIST[selectedClassIndex]
-		var character_file := str(selectedClassIndex) + ".png"
+		var player_class: String = CLASS_LIST[selectedClassIndex]
+		var character_file: String = str(selectedClassIndex) + ".png"
 		Multihelper.requestSpawn(%nameInput.text, multiplayer.get_unique_id(), character_file, player_class)
 		queue_free()
 

@@ -11,10 +11,16 @@ var targetPlayer : CharacterBody2D
 @export var enemyId := "":
 	set(value):
 		enemyId = value
-		var enemyData = Items.mobs[value]
-		%Sprite2D.texture = load("res://assets/characters/enemy/"+value+".png")
-		for stat in enemyData.keys():
-			set(stat, enemyData[stat])
+		if value not in GameData.mobs:
+			return
+		var data: Dictionary = GameData.mobs[value]
+		if is_node_ready():
+			%Sprite2D.texture = load(data.get("sprite", "res://assets/characters/enemy/zombie.png"))
+		maxhp   = data.get("max_hp",       100.0)
+		speed   = data.get("speed",         60.0)
+		attackRange  = data.get("attack_range",  55.0)
+		attackDamage = data.get("damage",        10.0)
+		attack  = data.get("attack_type",  "melee")
 
 var maxhp := 100.0:
 	set(value):
@@ -51,15 +57,16 @@ func move_towards_position():
 	move_and_slide()
 
 func tryAttack():
-	if multiplayer.is_server() and $AttackCooldown.is_stopped():
-		$AttackCooldown.start()
-		var projectileScene := load("res://scenes/attacks/"+attack+".tscn")
-		var projectile = projectileScene.instantiate()
-		spawner.get_node("Projectiles").add_child(projectile,true)
-		projectile.position = position
-		projectile.get_node("MovingParts").rotation = $MovingParts.rotation
-		projectile.hitPlayer.connect(hitPlayer)
-		projectile.targetPos = targetPlayer.position
+	if not multiplayer.is_server() or not $AttackCooldown.is_stopped():
+		return
+	$AttackCooldown.start()
+	if attack == "melee":
+		if is_instance_valid(targetPlayer):
+			targetPlayer.getDamage(self, attackDamage, "normal")
+	elif attack == "projectile":
+		var mob_data: Dictionary = GameData.mobs.get(enemyId, {})
+		var proj_id: String = mob_data.get("projectile", "magic_bolt")
+		GameData.spawn_projectile(self, proj_id, targetPlayer.global_position, "player")
 		
 func hitPlayer(body):
 	if multiplayer.is_server():

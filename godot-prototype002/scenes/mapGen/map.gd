@@ -9,8 +9,8 @@ extends Node2D
 # TODO: Replace tilesheet_complete.png with isometric tile art.
 #       Current atlas coords are placeholders kept from the original top-down tileset.
 
-var grass_atlas_coords := [Vector2i(0,0), Vector2i(1,0), Vector2i(2,0), Vector2i(3,0), Vector2i(16,0), Vector2i(17,0)]
-var water_atlas_coords := [Vector2i(18,0), Vector2i(19,0)]
+var grass_atlas_coords: Array[Vector2i] = [Vector2i(0,0), Vector2i(1,0), Vector2i(2,0), Vector2i(3,0), Vector2i(16,0), Vector2i(17,0)]
+var water_atlas_coords: Array[Vector2i] = [Vector2i(18,0), Vector2i(19,0)]
 var noise := FastNoiseLite.new()
 var tileset_source := 1
 
@@ -25,7 +25,7 @@ var walkable_tiles: Array[Vector2i] = []
 func generateMap() -> void:
 	noise.seed = Multihelper.mapSeed
 	noise.noise_type = FastNoiseLite.TYPE_PERLIN
-	noise.fractal_octaves = 1.1
+	noise.fractal_octaves = 4
 	noise.fractal_lacunarity = 2.0
 	noise.frequency = 0.03
 	walkable_tiles.clear()
@@ -37,16 +37,16 @@ func generate_terrain() -> void:
 		for x in range(map_width):
 			var noise_value := noise.get_noise_2d(x, y)
 			if noise_value > 0.03:
-				var tile_coord := grass_atlas_coords.pick_random()
+				var tile_coord: Vector2i = grass_atlas_coords.pick_random()
 				tile_map.set_cell(0, Vector2i(x, y), tileset_source, tile_coord, 0)
 				walkable_tiles.append(Vector2i(x, y))
 			else:
-				var tile_coord := water_atlas_coords.pick_random()
+				var tile_coord: Vector2i = water_atlas_coords.pick_random()
 				tile_map.set_cell(0, Vector2i(x, y), tileset_source, tile_coord, 0)
 
 
 func get_map_center_world() -> Vector2:
-	var center_tile := Vector2i(map_width / 2, map_height / 2)
+	var center_tile: Vector2i = Vector2i(map_width, map_height) / 2
 	return tile_map.map_to_local(center_tile)
 
 

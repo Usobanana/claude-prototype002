@@ -4,7 +4,6 @@ func _ready():
 	makePlayerList()
 	Multihelper.player_registered.connect(makePlayerList)
 	Multihelper.player_despawned.connect(makePlayerList)
-	Multihelper.player_score_updated.connect(makePlayerList)
 
 func makePlayerList():
 	for c in %playerList.get_children():

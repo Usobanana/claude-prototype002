@@ -1,0 +1,50 @@
+[gd_scene format=3 uid="uid://title_ui"]
+
+[ext_resource type="Script" uid="uid://cp8yikugrrnuc" path="res://scenes/ui/title/title.gd" id="1_title"]
+
+[node name="Title" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_title")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -180.0
+offset_right = 150.0
+offset_bottom = 180.0
+alignment = 1
+
+[node name="GameTitle" type="Label" parent="VBox"]
+text = "ExtractionGame"
+horizontal_alignment = 1
+
+[node name="NameLabel" type="Label" parent="VBox"]
+text = "プレイヤー名"
+
+[node name="NameInput" type="LineEdit" parent="VBox"]
+placeholder_text = "名前を入力..."
+
+[node name="IPLabel" type="Label" parent="VBox"]
+text = "接続先IP（参加時）"
+
+[node name="IPInput" type="LineEdit" parent="VBox"]
+placeholder_text = "127.0.0.1"
+text = "127.0.0.1"
+
+[node name="HostButton" type="Button" parent="VBox"]
+text = "ホスト（サーバー起動）"
+
+[node name="JoinButton" type="Button" parent="VBox"]
+text = "参加（接続）"
+
+[node name="StatusLabel" type="Label" parent="VBox"]
+text = ""
+horizontal_alignment = 1

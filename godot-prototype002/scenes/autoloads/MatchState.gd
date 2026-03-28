@@ -111,10 +111,7 @@ func _sync_state(player_id: int, data: Dictionary) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _rpc_xp_update(xp: int, level: int) -> void:
-	var pid := multiplayer.get_remote_sender_id() if not multiplayer.is_server() else 1
-	# Caller's own state update; find by context
 	state_updated.emit(multiplayer.get_unique_id())
-	# We keep local xp/level in our own state entry; update it
 	var my_id := multiplayer.get_unique_id()
 	if my_id in states:
 		states[my_id]["xp"] = xp

@@ -1,0 +1,113 @@
+[gd_scene format=3 uid="uid://cd43ckviau7uv"]
+
+[ext_resource type="Script" uid="uid://pxoyxbbn6rmv" path="res://scenes/base/base.gd" id="1_base"]
+[ext_resource type="Script" uid="uid://cxv83mf8qjp3i" path="res://scenes/base/Blacksmith.gd" id="3_bs"]
+[ext_resource type="Script" uid="uid://cvaxocivj3dnr" path="res://scenes/base/WarehouseNPC.gd" id="4_wh"]
+[ext_resource type="Script" uid="uid://b7cg88kyvktqv" path="res://scenes/base/EquipmentStation.gd" id="5_eq"]
+[ext_resource type="Script" uid="uid://c7nbcw1tnjivn" path="res://scenes/base/MatchStartZone.gd" id="6_ms"]
+[ext_resource type="PackedScene" path="res://scenes/ui/blacksmith/BlacksmithUI.tscn" id="7_bsui"]
+[ext_resource type="PackedScene" path="res://scenes/ui/warehouse/WarehouseUI.tscn" id="8_whui"]
+[ext_resource type="PackedScene" path="res://scenes/ui/equipment/EquipmentUI.tscn" id="9_equi"]
+
+[sub_resource type="RectangleShape2D" id="Shape_bs"]
+size = Vector2(120, 120)
+
+[sub_resource type="RectangleShape2D" id="Shape_wh"]
+size = Vector2(120, 120)
+
+[sub_resource type="RectangleShape2D" id="Shape_eq"]
+size = Vector2(120, 120)
+
+[sub_resource type="RectangleShape2D" id="Shape_ms"]
+size = Vector2(160, 160)
+
+[node name="Base" type="Node2D" unique_id=2066315181]
+script = ExtResource("1_base")
+
+[node name="Floor" type="ColorRect" parent="." unique_id=111111001]
+color = Color(0.25, 0.22, 0.18, 1)
+offset_left = -2000.0
+offset_top = -2000.0
+offset_right = 2000.0
+offset_bottom = 2000.0
+z_index = -10
+
+[node name="Players" type="Node2D" parent="." unique_id=987955449]
+y_sort_enabled = true
+
+[node name="NPCs" type="Node2D" parent="." unique_id=697108700]
+
+[node name="Blacksmith" type="Area2D" parent="NPCs" unique_id=1440006308]
+position = Vector2(200, 0)
+script = ExtResource("3_bs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="NPCs/Blacksmith" unique_id=1688539716]
+shape = SubResource("Shape_bs")
+
+[node name="Label" type="Label" parent="NPCs/Blacksmith" unique_id=1828700488]
+offset_left = -30.0
+offset_top = -80.0
+offset_right = -30.0
+offset_bottom = -80.0
+text = "🔨 鍛冶屋"
+
+[node name="Warehouse" type="Area2D" parent="NPCs" unique_id=1856173894]
+position = Vector2(400, 0)
+script = ExtResource("4_wh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="NPCs/Warehouse" unique_id=983773052]
+shape = SubResource("Shape_wh")
+
+[node name="Label" type="Label" parent="NPCs/Warehouse" unique_id=638299912]
+offset_left = -20.0
+offset_top = -80.0
+offset_right = -20.0
+offset_bottom = -80.0
+text = "📦 倉庫"
+
+[node name="EquipmentStation" type="Area2D" parent="NPCs" unique_id=1754014441]
+position = Vector2(600, 0)
+script = ExtResource("5_eq")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="NPCs/EquipmentStation" unique_id=1669432355]
+shape = SubResource("Shape_eq")
+
+[node name="Label" type="Label" parent="NPCs/EquipmentStation" unique_id=821827140]
+offset_left = -20.0
+offset_top = -80.0
+offset_right = -20.0
+offset_bottom = -80.0
+text = "⚔️ 装備"
+
+[node name="MatchStartZone" type="Area2D" parent="NPCs" unique_id=1060555728]
+position = Vector2(-200, 0)
+script = ExtResource("6_ms")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="NPCs/MatchStartZone" unique_id=1221766499]
+shape = SubResource("Shape_ms")
+
+[node name="Label" type="Label" parent="NPCs/MatchStartZone" unique_id=964935211]
+offset_left = -40.0
+offset_top = -100.0
+offset_right = -40.0
+offset_bottom = -100.0
+text = "⚡ マッチ開始
+(ホストのみ)"
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=687974080]
+
+[node name="BlacksmithUI" parent="HUD" unique_id=1579219401 instance=ExtResource("7_bsui")]
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="WarehouseUI" parent="HUD" unique_id=719245583 instance=ExtResource("8_whui")]
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="EquipmentUI" parent="HUD" unique_id=1843538440 instance=ExtResource("9_equi")]
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=288346694]
+_spawnable_scenes = PackedStringArray("res://scenes/character/player.tscn")
+spawn_path = NodePath("../Players")

@@ -1,0 +1,51 @@
+[gd_scene format=3 uid="uid://equipment_ui"]
+
+[ext_resource type="Script" path="res://scenes/ui/equipment/equipment_ui.gd" uid="uid://equipment_ui_gd" id="1_equi"]
+
+[node name="EquipmentUI" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_equi")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -300.0
+offset_right = 250.0
+offset_bottom = 300.0
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+
+[node name="Title" type="Label" parent="Panel/VBox"]
+text = "装備選択"
+
+[node name="WeaponTitle" type="Label" parent="Panel/VBox"]
+text = "武器"
+
+[node name="WeaponList" type="VBoxContainer" parent="Panel/VBox"]
+
+[node name="ArmorTitle" type="Label" parent="Panel/VBox"]
+text = "防具"
+
+[node name="ArmorList" type="VBoxContainer" parent="Panel/VBox"]
+
+[node name="EquippedLabel" type="Label" parent="Panel/VBox"]
+text = "装備中: 武器[クラス標準] 防具[なし]"
+
+[node name="CloseButton" type="Button" parent="Panel/VBox"]
+text = "閉じる"

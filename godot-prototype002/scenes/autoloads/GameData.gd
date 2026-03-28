@@ -451,3 +451,123 @@ func spawn_projectile(shooter: Node, projectile_id: String, target_pos: Vector2,
 	shooter.get_parent().add_child(proj, true)
 	proj.global_position = shooter.global_position
 	proj.setup(shooter, proj_data, target_pos, target_group)
+
+
+# ---------------------------------------------------------------------------
+# Materials
+# ---------------------------------------------------------------------------
+var materials: Dictionary = {
+	"wood":         { "name": "木材",   "desc": "ゾンビを倒すと入手" },
+	"stone":        { "name": "石",     "desc": "採集で入手" },
+	"iron":         { "name": "鉄鉱石", "desc": "エリートゾンビを倒すと入手" },
+	"leather":      { "name": "革",     "desc": "スパイダーを倒すと入手" },
+	"magic_ore":    { "name": "魔鉱石", "desc": "設計図解放後に入手可能" },
+	"fire_crystal": { "name": "炎晶石", "desc": "設計図解放後に入手可能" },
+}
+
+
+# ---------------------------------------------------------------------------
+# Armor
+# ---------------------------------------------------------------------------
+var armor: Dictionary = {
+	"leather_armor": {
+		"name": "革鎧",
+		"desc": "軽量な防具。動きを妨げない",
+		"stat_mod": { "damage_reduction": 0.05 },
+	},
+	"iron_armor": {
+		"name": "鉄鎧",
+		"desc": "頑丈な鉄製の防具",
+		"stat_mod": { "damage_reduction": 0.12 },
+	},
+	"magic_robe": {
+		"name": "魔法のローブ",
+		"desc": "魔法使い専用の防具",
+		"stat_mod": { "damage_reduction": 0.06, "damage_bonus": 0.10 },
+	},
+}
+
+
+# ---------------------------------------------------------------------------
+# Crafting Recipes
+# ---------------------------------------------------------------------------
+# category: "weapon" or "armor"
+# result_id: key in weapons dict or armor dict
+# blueprint_required: true = needs blueprint item submitted to blacksmith first
+# blueprint_id: the blueprint ID that unlocks this recipe (if required)
+var recipes: Dictionary = {
+	"recipe_iron_sword": {
+		"name": "鉄の剣",
+		"category": "weapon",
+		"result_id": "sword",
+		"materials": { "iron": 5, "leather": 2 },
+		"blueprint_required": false,
+		"blueprint_id": "",
+	},
+	"recipe_war_spear": {
+		"name": "戦槍",
+		"category": "weapon",
+		"result_id": "spear",
+		"materials": { "iron": 8, "wood": 3 },
+		"blueprint_required": false,
+		"blueprint_id": "",
+	},
+	"recipe_iron_club": {
+		"name": "鉄棍棒",
+		"category": "weapon",
+		"result_id": "club",
+		"materials": { "iron": 6, "wood": 2 },
+		"blueprint_required": false,
+		"blueprint_id": "",
+	},
+	"recipe_leather_armor": {
+		"name": "革鎧",
+		"category": "armor",
+		"result_id": "leather_armor",
+		"materials": { "leather": 8, "wood": 2 },
+		"blueprint_required": false,
+		"blueprint_id": "",
+	},
+	"recipe_iron_armor": {
+		"name": "鉄鎧",
+		"category": "armor",
+		"result_id": "iron_armor",
+		"materials": { "iron": 12, "leather": 4 },
+		"blueprint_required": false,
+		"blueprint_id": "",
+	},
+	"recipe_magic_staff_adv": {
+		"name": "魔導杖・改",
+		"category": "weapon",
+		"result_id": "staff",
+		"materials": { "magic_ore": 3, "fire_crystal": 2 },
+		"blueprint_required": true,
+		"blueprint_id": "bp_magic_staff",
+	},
+	"recipe_composite_bow": {
+		"name": "複合弓",
+		"category": "weapon",
+		"result_id": "bow",
+		"materials": { "wood": 5, "leather": 5, "iron": 2 },
+		"blueprint_required": true,
+		"blueprint_id": "bp_composite_bow",
+	},
+	"recipe_magic_robe": {
+		"name": "魔法のローブ",
+		"category": "armor",
+		"result_id": "magic_robe",
+		"materials": { "magic_ore": 2, "leather": 3 },
+		"blueprint_required": true,
+		"blueprint_id": "bp_magic_robe",
+	},
+}
+
+
+func get_available_recipes(unlocked_blueprints: Array) -> Array:
+	var result: Array = []
+	for recipe_id in recipes:
+		var r: Dictionary = recipes[recipe_id]
+		if r["blueprint_required"] and r["blueprint_id"] not in unlocked_blueprints:
+			continue
+		result.append(recipe_id)
+	return result

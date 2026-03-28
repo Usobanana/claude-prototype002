@@ -2,18 +2,18 @@ extends Node2D
 
 # Enemy spawning constants
 const ENEMY_WAVE_COUNT := 2
-var enemy_types := GameData.mobs.keys()
+var enemy_types: Array = GameData.mobs.keys()
 var spawned_enemies: Dictionary = {}  # { player_id: count }
 
 # Extraction points
-var extraction_point_scene := preload("res://scenes/match/ExtractionPoint.tscn") if ResourceLoader.exists("res://scenes/match/ExtractionPoint.tscn") else null
+var extraction_point_scene: PackedScene = null
 
 func _ready() -> void:
 	if multiplayer.is_server():
 		Multihelper.loadMap()
 		_spawn_extraction_points()
-		var map_center := $Map.get_map_center_world()
-		var map_radius := $Map.get_map_radius_world()
+		var map_center: Vector2 = $Map.get_map_center_world()
+		var map_radius: float = $Map.get_map_radius_world()
 		MatchManager.start_match(map_center, map_radius)
 
 	createHUD()
@@ -33,16 +33,19 @@ func _spawn_extraction_points() -> void:
 	if not multiplayer.is_server():
 		return
 	if extraction_point_scene == null:
-		push_warning("ExtractionPoint.tscn not found — create it in the editor.")
-		return
+		if ResourceLoader.exists("res://scenes/match/ExtractionPoint.tscn"):
+			extraction_point_scene = load("res://scenes/match/ExtractionPoint.tscn")
+		else:
+			push_warning("ExtractionPoint.tscn not found — create it in the editor.")
+			return
 
-	var walkable := $Map.walkable_tiles
+	var walkable: Array[Vector2i] = $Map.walkable_tiles
 	if walkable.is_empty():
 		return
 
 	# Place extraction points near the outer ring of the map (last 20% of tiles from center)
-	var map_cx := Constants.MAP_SIZE.x / 2
-	var map_cy := Constants.MAP_SIZE.y / 2
+	var map_cx: int = Constants.MAP_SIZE.x / 2
+	var map_cy: int = Constants.MAP_SIZE.y / 2
 	var outer_tiles: Array = []
 	for tile in walkable:
 		var dist := Vector2(tile).distance_to(Vector2(map_cx, map_cy))
@@ -83,15 +86,15 @@ func trySpawnEnemies() -> void:
 
 
 func _get_player_enemy_count(pid: int) -> int:
-	return spawned_enemies.get(pid, 0)
+	return int(spawned_enemies.get(pid, 0))
 
 
 func _increase_player_enemy_count(pid: int) -> void:
-	spawned_enemies[pid] = spawned_enemies.get(pid, 0) + 1
+	spawned_enemies[pid] = int(spawned_enemies.get(pid, 0)) + 1
 
 
 func decreasePlayerEnemyCount(pid: int) -> void:
-	spawned_enemies[pid] = maxi(0, spawned_enemies.get(pid, 1) - 1)
+	spawned_enemies[pid] = maxi(0, int(spawned_enemies.get(pid, 1)) - 1)
 
 
 func _on_enemy_spawn_timer_timeout() -> void:

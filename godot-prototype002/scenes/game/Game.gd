@@ -1,20 +1,32 @@
 extends Node
 
-func start_game():
-	# Hide the UI and unpause to start the game.
+# Called by Multihelper after connect/host to load the base scene.
+# Each peer calls this independently, so just execute locally — no RPC needed here.
+func start_game() -> void:
 	%MainMenu.queue_free()
 	get_tree().paused = false
-	# Only change level on the server.
-	# Clients will instantiate the level via the spawner.
-	if multiplayer.is_server():
-		change_level.call_deferred(load("res://scenes/main/main.tscn"))
-		
-# Call this function deferred and only on the main authority (server).
-func change_level(scene: PackedScene):
-	# Remove old level if any.
-	var level = %Level
+	_load_scene("res://scenes/base/Base.tscn")
+
+# Called from Base when the host starts a match.
+func start_field() -> void:
+	if not multiplayer.is_server():
+		return
+	_load_scene.rpc("res://scenes/main/main.tscn")
+
+# Called when a field match ends — all return to base.
+func return_to_base() -> void:
+	if not multiplayer.is_server():
+		return
+	_load_scene.rpc("res://scenes/base/Base.tscn")
+
+@rpc("authority", "call_local", "reliable")
+func _load_scene(path: String) -> void:
+	var scene: PackedScene = load(path)
+	change_level(scene)
+
+func change_level(scene: PackedScene) -> void:
+	var level: Node = %Level
 	for c in level.get_children():
 		level.remove_child(c)
 		c.queue_free()
-	# Add new level.
 	level.add_child(scene.instantiate())

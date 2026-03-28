@@ -13,11 +13,13 @@ extends CanvasLayer
 #       │       ├── Button (option 1)
 #       │       └── Button (option 2)
 
-add_to_group("skill_picker_ui")
-
 @onready var options_container: HBoxContainer = $PanelContainer/VBoxContainer/HBoxContainer
 
 var _current_options: Array = []
+
+
+func _ready() -> void:
+	add_to_group("skill_picker_ui")
 
 
 func show_options(options: Array) -> void:

@@ -86,7 +86,7 @@ func _cancel_channel_for(player_id: int) -> void:
 		_channeling[player_id].cancel_channel()
 
 
-func _extraction_complete(player_id: int, body: Node, channel: Node) -> void:
+func _extraction_complete(player_id: int, _body: Node, channel: Node) -> void:
 	_channeling.erase(player_id)
 	channel.queue_free()
 	player_extracted.emit(player_id)

@@ -53,13 +53,8 @@ var _downed_hp: float = 100.0       # drains over DOWN_DRAIN_TIME seconds
 var _downed_timer: float = 0.0
 var _dying: bool = false            # prevents re-entrant die()
 
-# Revive channeling
-var _revive_channel: ChannelingInteraction = null
-var _revive_target: Node = null
-
-# Finish-off channeling
-var _finishoff_channel: ChannelingInteraction = null
-var _finishoff_target: Node = null
+# Revive channeling (active channel node; target tracked by ExtractionPoint)
+var _revive_channel: Node = null
 
 # ---------------------------------------------------------------------------
 # Skill state
@@ -189,18 +184,19 @@ func moveProcess(vel: Vector2, angle: float, doing_action: bool) -> void:
 
 
 func handleAnims(vel: Vector2, doing_action: bool) -> void:
+	var anim := $AnimationPlayer
 	if is_downed:
-		if !$AnimationPlayer.is_playing() or $AnimationPlayer.current_animation != "walking":
-			$AnimationPlayer.play("walking")
+		if anim.has_animation("walking") and anim.current_animation != "walking":
+			anim.play("walking")
 		return
 	if doing_action:
-		if !$AnimationPlayer.is_playing() or $AnimationPlayer.current_animation != "swinging":
-			$AnimationPlayer.play("swinging")
+		if anim.has_animation("swinging") and anim.current_animation != "swinging":
+			anim.play("swinging")
 	elif vel != Vector2.ZERO:
-		if !$AnimationPlayer.is_playing() or $AnimationPlayer.current_animation != "walking":
-			$AnimationPlayer.play("walking")
+		if anim.has_animation("walking") and anim.current_animation != "walking":
+			anim.play("walking")
 	else:
-		$AnimationPlayer.stop()
+		anim.stop()
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +219,7 @@ func _use_skill(slot: int) -> void:
 
 
 func _do_basic_attack() -> void:
-	var weapon_data := GameData.weapons.get(weapon_type, {})
+	var weapon_data: Dictionary = GameData.weapons.get(weapon_type, {})
 	if weapon_data.is_empty():
 		return
 	_attack_cooldown_remaining = weapon_data.get("cooldown", 0.6)
@@ -252,7 +248,7 @@ func punchCheckCollision() -> void:
 
 @rpc("any_peer", "reliable")
 func sendProjectile(towards: Vector2) -> void:
-	var weapon_data := GameData.weapons.get(weapon_type, {})
+	var weapon_data: Dictionary = GameData.weapons.get(weapon_type, {})
 	var proj_id: String = weapon_data.get("projectile", "")
 	if proj_id != "":
 		GameData.spawn_projectile(self, proj_id, towards, "damageable")
@@ -364,7 +360,7 @@ func _on_level_up(player_id: int, _new_level: int, options: Array) -> void:
 func _on_skill_applied(player_id: int, skill_id: String) -> void:
 	if player_id != int(str(name)):
 		return
-	var skill := GameData.skills.get(skill_id, {})
+	var skill: Dictionary = GameData.skills.get(skill_id, {})
 	if skill.is_empty():
 		return
 	# Apply stat boosts immediately
