@@ -1,93 +1,109 @@
 extends Node2D
 
-#objects
-const initialSpawnObjects := 10
-const maxObjects := Constants.MAX_OBJECTS
-const objectWaveCount := 10
-var spawnedObjects := 0
+# Enemy spawning constants
+const ENEMY_WAVE_COUNT := 2
+var enemy_types := GameData.mobs.keys()
+var spawned_enemies: Dictionary = {}  # { player_id: count }
 
-#enemies
-var enemyTypes := Items.mobs.keys()
-const enemyWaveCount := 1
-const maxEnemiesPerPlayer := Constants.MAX_ENEMIES_PER_PLAYER
-const enemySpawnRadiusMin := 8
-const enemySpawnRadiusMax := 9
-var spawnedEnemies := {}
+# Extraction points
+var extraction_point_scene := preload("res://scenes/match/ExtractionPoint.tscn") if ResourceLoader.exists("res://scenes/match/ExtractionPoint.tscn") else null
 
-func _ready():
+func _ready() -> void:
 	if multiplayer.is_server():
 		Multihelper.loadMap()
-		spawnObjects(initialSpawnObjects)
-		$HUD.queue_free()
-	$dayNight.time_tick.connect(%DayNightCycleUI.set_daytime)
-	createHUD()
+		_spawn_extraction_points()
+		var map_center := $Map.get_map_center_world()
+		var map_radius := $Map.get_map_radius_world()
+		MatchManager.start_match(map_center, map_radius)
 
-func createHUD():
+	createHUD()
+	MatchManager.match_ended.connect(_on_match_ended)
+
+
+func createHUD() -> void:
 	var hudScene := preload("res://scenes/ui/playersList/generalHud.tscn")
 	var hud := hudScene.instantiate()
 	$HUD.add_child(hud)
 
-#object spawn
 
-func spawnObjects(amount):
-	var breakableScene := preload("res://scenes/object/breakable.tscn")
-	var spawnedThisWave := 0
-	for i in range(amount):
-		var spawnPos = $Map.tile_map.map_to_local($Map.walkable_tiles.pick_random())
-		var breakable := breakableScene.instantiate()
-		var objectId = Items.objects.keys().pick_random()
-		$Objects.add_child(breakable,true)
-		breakable.objectId = objectId
-		breakable.position = spawnPos
-		breakable.spawner = self
-		spawnedObjects += 1
-		spawnedThisWave += 1
-	return spawnedThisWave
+# ---------------------------------------------------------------------------
+# Extraction points
+# ---------------------------------------------------------------------------
+func _spawn_extraction_points() -> void:
+	if not multiplayer.is_server():
+		return
+	if extraction_point_scene == null:
+		push_warning("ExtractionPoint.tscn not found — create it in the editor.")
+		return
 
-func trySpawnObjectWave():
-	if spawnedObjects < maxObjects:
-		var toMax := maxObjects - spawnedObjects
-		spawnObjects(min(objectWaveCount, toMax))
+	var walkable := $Map.walkable_tiles
+	if walkable.is_empty():
+		return
 
-func _on_object_spawn_timer_timeout():
-	if multiplayer.is_server():
-		trySpawnObjectWave()
+	# Place extraction points near the outer ring of the map (last 20% of tiles from center)
+	var map_cx := Constants.MAP_SIZE.x / 2
+	var map_cy := Constants.MAP_SIZE.y / 2
+	var outer_tiles: Array = []
+	for tile in walkable:
+		var dist := Vector2(tile).distance_to(Vector2(map_cx, map_cy))
+		if dist > Constants.MAP_SIZE.x * 0.3:
+			outer_tiles.append(tile)
 
-#enemy spawn
-func trySpawnEnemies():
+	outer_tiles.shuffle()
+	var count := mini(Constants.EXTRACTION_COUNT, outer_tiles.size())
+	for i in range(count):
+		var ep := extraction_point_scene.instantiate()
+		$ExtractionPoints.add_child(ep, true)
+		ep.position = $Map.tile_map.map_to_local(outer_tiles[i])
+
+
+# ---------------------------------------------------------------------------
+# Enemy spawning
+# ---------------------------------------------------------------------------
+func trySpawnEnemies() -> void:
 	var enemyScene := preload("res://scenes/enemy/enemy.tscn")
-	var players = Multihelper.spawnedPlayers.keys()
-	for player in players:
-		var playerEnemies := getPlayerEnemyCount(player)
-		if playerEnemies < maxEnemiesPerPlayer:
-			var toSpawn = min(maxEnemiesPerPlayer - playerEnemies, enemyWaveCount)
-			var spawnPositions = $NavHelper.getNRandomNavigableTileInPlayerRadius(player, toSpawn, enemySpawnRadiusMin, enemySpawnRadiusMax)
-			for pos in spawnPositions:
-				var enemy = enemyScene.instantiate()
-				$Enemies.add_child(enemy,true)
-				enemy.position = pos
-				enemy.spawner = self
-				enemy.targetPlayerId = player
-				enemy.enemyId = enemyTypes.pick_random()
-				increasePlayerEnemyCount(player)
+	var players := Multihelper.spawnedPlayers.keys()
+	for player_id in players:
+		var count := _get_player_enemy_count(player_id)
+		if count >= Constants.MAX_ENEMIES_PER_PLAYER:
+			continue
+		var to_spawn := mini(Constants.MAX_ENEMIES_PER_PLAYER - count, ENEMY_WAVE_COUNT)
+		var positions = $NavHelper.getNRandomNavigableTileInPlayerRadius(
+			player_id, to_spawn,
+			Constants.ENEMY_SPAWN_RADIUS_MIN,
+			Constants.ENEMY_SPAWN_RADIUS_MAX
+		)
+		for pos in positions:
+			var enemy := enemyScene.instantiate()
+			$Enemies.add_child(enemy, true)
+			enemy.position = pos
+			enemy.spawner = self
+			enemy.enemyId = enemy_types.pick_random()
+			_increase_player_enemy_count(player_id)
 
-func getPlayerEnemyCount(pId) -> int:
-	if pId in spawnedEnemies:
-		return spawnedEnemies[pId]
-	return 0
 
-func increasePlayerEnemyCount(pId) -> void:
-	if pId in spawnedEnemies:
-		spawnedEnemies[pId] += 1
-	else:
-		spawnedEnemies[pId] = 1
+func _get_player_enemy_count(pid: int) -> int:
+	return spawned_enemies.get(pid, 0)
 
-func decreasePlayerEnemyCount(pId) -> void:
-	if pId in spawnedEnemies:
-		spawnedEnemies[pId] -= 1
-	else:
-		spawnedEnemies[pId] = 1
 
-func _on_enemy_spawn_timer_timeout():
+func _increase_player_enemy_count(pid: int) -> void:
+	spawned_enemies[pid] = spawned_enemies.get(pid, 0) + 1
+
+
+func decreasePlayerEnemyCount(pid: int) -> void:
+	spawned_enemies[pid] = maxi(0, spawned_enemies.get(pid, 1) - 1)
+
+
+func _on_enemy_spawn_timer_timeout() -> void:
 	if multiplayer.is_server():
 		trySpawnEnemies()
+
+
+# ---------------------------------------------------------------------------
+# Match end
+# ---------------------------------------------------------------------------
+func _on_match_ended() -> void:
+	# Kill all remaining players (forced death = item loss)
+	for player in $Players.get_children():
+		if player.is_in_group("player"):
+			player.die()

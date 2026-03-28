@@ -1,245 +1,424 @@
 extends CharacterBody2D
 
-signal mob_killed
-signal object_destroyed
-signal player_killed
+# ---------------------------------------------------------------------------
+# Signals
+# ---------------------------------------------------------------------------
+signal mob_killed()
+signal player_killed()
 
-@export var playerName : String:
+# ---------------------------------------------------------------------------
+# Exports / identity
+# ---------------------------------------------------------------------------
+@export var playerName: String:
 	set(value):
 		playerName = value
-		$PlayerUi.setPlayerName(value)
-		
-@export var characterFile : String:
+		if is_node_ready():
+			$PlayerUi.setPlayerName(value)
+
+@export var characterFile: String:
 	set(value):
 		characterFile = value
-		$MovingParts/Sprite2D.texture = load("res://assets/characters/bodies/"+value)
-		
-var inventory : Control
+		if is_node_ready():
+			$MovingParts/Sprite2D.texture = load("res://assets/characters/bodies/" + value)
 
-var equippedItem : String:
+# ---------------------------------------------------------------------------
+# Class & stats
+# ---------------------------------------------------------------------------
+var player_class: String = "warrior":
 	set(value):
-		equippedItem = value
-		if value in Items.equips:
-			var itemData = Items.equips[value]
-			if "projectile" in itemData:
-				spawnsProjectile = itemData["projectile"]
-			else:
-				spawnsProjectile = ""
+		player_class = value
+		_apply_class_stats()
 
-#stats
-@export var maxHP := 250.0
-@export var hp := maxHP:
+@export var maxHP: float = 300.0
+@export var hp: float = maxHP:
 	set(value):
 		hp = value
-		$bloodParticles.emitting = true
-		$PlayerUi.setHPBarRatio(hp/maxHP)
-		if hp <= 0:
-			die()
-@export var speed := 200
-var spawnsProjectile := ""
-@export var attackDamage := 10:
-	get:
-		if equippedItem:
-			return Items.equips[equippedItem]["damage"] + attackDamage
-		else:
-			return attackDamage
-var damageType := "normal":
-	get:
-		if equippedItem:
-			return Items.equips[equippedItem]["damageType"]
-		else:
-			return damageType
-var attackRange := 1.0:
-	set(value):
-		var clampedVal = clampf(value, 1.0, 5.0)
-		attackRange = clampedVal
-		%HitCollision.shape.height = 20 * clampedVal
+		if is_node_ready():
+			$bloodParticles.emitting = true
+			$PlayerUi.setHPBarRatio(hp / maxHP)
+		if hp <= 0.0 and not is_downed and not _dying:
+			enter_downed_state()
 
-func _ready():
+@export var speed: float = 200.0
+@export var attackDamage: float = 30.0
+var weapon_type: String = "sword"
+var damage_reduction: float = 0.0   # 0.0–1.0 from passive skills
+var damage_bonus: float = 0.0       # multiplier bonus from skills
+
+# ---------------------------------------------------------------------------
+# Down state
+# ---------------------------------------------------------------------------
+var is_downed: bool = false
+var _downed_hp: float = 100.0       # drains over DOWN_DRAIN_TIME seconds
+var _downed_timer: float = 0.0
+var _dying: bool = false            # prevents re-entrant die()
+
+# Revive channeling
+var _revive_channel: ChannelingInteraction = null
+var _revive_target: Node = null
+
+# Finish-off channeling
+var _finishoff_channel: ChannelingInteraction = null
+var _finishoff_target: Node = null
+
+# ---------------------------------------------------------------------------
+# Skill state
+# ---------------------------------------------------------------------------
+var active_skills: Array = ["", "", ""]   # skill IDs in slots 0/1/2
+var passive_skills: Array = ["", ""]
+var _attack_cooldown_remaining: float = 0.0
+
+# ---------------------------------------------------------------------------
+# Extraction channeling (managed by ExtractionPoint; we just track it here
+# so that taking damage can interrupt it)
+# ---------------------------------------------------------------------------
+var _extraction_point_ref: Node = null
+
+# ---------------------------------------------------------------------------
+# Circle damage tracking
+# ---------------------------------------------------------------------------
+var _circle_damage_accum: float = 0.0
+
+# ---------------------------------------------------------------------------
+# Ready
+# ---------------------------------------------------------------------------
+func _ready() -> void:
+	add_to_group("player")
+	add_to_group("damageable")
 	if multiplayer.is_server():
-		Inventory.itemRemoved.connect(itemRemoved)
-		mob_killed.connect(mobKilled)
-		player_killed.connect(enemyPlayerKilled)
-		object_destroyed.connect(objectDestroyed)
+		mob_killed.connect(_on_mob_killed)
+		player_killed.connect(_on_player_killed)
+		MatchManager.circle_updated.connect(_on_circle_updated)
 	if name == str(multiplayer.get_unique_id()):
-		inventory = get_parent().get_parent().get_node("HUD/Inventory")
-		inventory.player = self
 		$Camera2D.enabled = true
-	Multihelper.player_disconnected.connect(disconnected)
+		MatchState.level_up.connect(_on_level_up)
+		MatchState.skill_applied.connect(_on_skill_applied)
+	Multihelper.player_disconnected.connect(_on_disconnected)
 
-func visibilityFilter(id):
-	if id == int(str(name)):
-		return false
-	return true
+
+func _apply_class_stats() -> void:
+	if player_class not in GameData.classes:
+		return
+	var c: Dictionary = GameData.classes[player_class]
+	maxHP = c["base_hp"]
+	hp = maxHP
+	speed = c["base_speed"]
+	attackDamage = c["base_damage"]
+	weapon_type = c["weapon"]
+
+
+# ---------------------------------------------------------------------------
+# Process
+# ---------------------------------------------------------------------------
+func _process(delta: float) -> void:
+	_attack_cooldown_remaining = maxf(0.0, _attack_cooldown_remaining - delta)
+
+	if str(multiplayer.get_unique_id()) != name:
+		return
+
+	if is_downed:
+		_process_downed_input(delta)
+		return
+
+	var vel := Input.get_vector("walkLeft", "walkRight", "walkUp", "walkDown") * speed
+	var mouse_pos := get_global_mouse_position()
+	var angle := (mouse_pos - global_position).angle()
+	var doing_action := Input.is_action_pressed("leftClickAction")
+
+	# Skill input
+	var skill_slot := -1
+	if Input.is_action_just_pressed("skill_1"):
+		skill_slot = 0
+	elif Input.is_action_just_pressed("skill_2"):
+		skill_slot = 1
+	elif Input.is_action_just_pressed("skill_3"):
+		skill_slot = 2
+
+	# Interaction (revive / finish-off)
+	var interacting := Input.is_action_pressed("interact")
+
+	moveProcess(vel, angle, doing_action)
+	sendInputstwo.rpc_id(1, {
+		"vel": vel,
+		"angle": angle,
+		"doingAction": doing_action,
+		"skill_slot": skill_slot,
+		"interacting": interacting,
+	})
+	sendPos.rpc(position)
+
+
+func _process_downed_input(_delta: float) -> void:
+	# Downed: can crawl at reduced speed only
+	var vel := Input.get_vector("walkLeft", "walkRight", "walkUp", "walkDown") * (speed * 0.25)
+	moveProcess(vel, 0.0, false)
+	sendInputstwo.rpc_id(1, {
+		"vel": vel, "angle": 0.0, "doingAction": false, "skill_slot": -1, "interacting": false,
+	})
+	sendPos.rpc(position)
+
+
+# ---------------------------------------------------------------------------
+# RPC: input relay
+# ---------------------------------------------------------------------------
+@rpc("any_peer", "call_local", "reliable")
+func sendInputstwo(data: Dictionary) -> void:
+	moveServer(data["vel"], data["angle"], data["doingAction"], data.get("skill_slot", -1), data.get("interacting", false))
+
 
 @rpc("any_peer", "call_local", "reliable")
-func sendMessage(text):
-	if multiplayer.is_server():
-		var messageBoxScene := preload("res://scenes/ui/chat/message_box.tscn")
-		var messageBox := messageBoxScene.instantiate()
-		%PlayerMessages.add_child(messageBox, true)
-		messageBox.text = str(text)
-
-func disconnected(id):
-	if str(id) == name:
-		die()
-	
-func _process(_delta):
-	if str(multiplayer.get_unique_id()) == name:
-		var vel = Input.get_vector("walkLeft", "walkRight", "walkUp", "walkDown") * speed
-		var mouse_position = get_global_mouse_position()
-		var direction_to_mouse = mouse_position - global_position
-		var angle = direction_to_mouse.angle()
-		var doingAction = Input.is_action_pressed("leftClickAction")
-		#Apply local movement
-		moveProcess(vel, angle, doingAction)
-		#Send input to server for replication
-		var inputData = {
-			"vel": vel,
-			"angle": angle,
-			"doingAction": doingAction
-		}
-		sendInputstwo.rpc_id(1, inputData)
-		sendPos.rpc(position)
-
-@rpc("any_peer", "call_local", "reliable")
-func sendInputstwo(data):
-	moveServer(data["vel"], data["angle"], data["doingAction"])
-
-@rpc("any_peer", "call_local", "reliable")
-func moveServer(vel, angle, doingAction):
+func moveServer(vel: Vector2, angle: float, doing_action: bool, skill_slot: int, _interacting: bool) -> void:
 	$MovingParts.rotation = angle
-	handleAnims(vel,doingAction)
+	handleAnims(vel, doing_action)
+	# Server-side: handle skill use
+	if multiplayer.is_server() and skill_slot >= 0 and _attack_cooldown_remaining <= 0.0:
+		_use_skill(skill_slot)
+
 
 @rpc("any_peer", "call_local", "reliable")
-func sendPos(pos):
+func sendPos(pos: Vector2) -> void:
 	position = pos
 
-func moveProcess(vel, angle, doingAction):
+
+func moveProcess(vel: Vector2, angle: float, doing_action: bool) -> void:
 	velocity = vel
 	if velocity != Vector2.ZERO:
 		move_and_slide()
 	$MovingParts.rotation = angle
-	handleAnims(vel,doingAction)
+	handleAnims(vel, doing_action)
 
-func handleAnims(vel, doing_action):
+
+func handleAnims(vel: Vector2, doing_action: bool) -> void:
+	if is_downed:
+		if !$AnimationPlayer.is_playing() or $AnimationPlayer.current_animation != "walking":
+			$AnimationPlayer.play("walking")
+		return
 	if doing_action:
-		var action_anim = Items.equips[equippedItem]["attack"] if equippedItem else "punching"
-		if !$AnimationPlayer.is_playing() or $AnimationPlayer.current_animation != action_anim:
-			$AnimationPlayer.play(action_anim)
+		if !$AnimationPlayer.is_playing() or $AnimationPlayer.current_animation != "swinging":
+			$AnimationPlayer.play("swinging")
 	elif vel != Vector2.ZERO:
 		if !$AnimationPlayer.is_playing() or $AnimationPlayer.current_animation != "walking":
 			$AnimationPlayer.play("walking")
 	else:
 		$AnimationPlayer.stop()
 
-func _on_next_item():
-	inventory.nextSelection()
 
-# Define what happens when previousItem is triggered
-func _on_previous_item():
-	inventory.prevSelection()
-
-# Handle input events
-func _unhandled_input(event):
-	if name != str(multiplayer.get_unique_id()):
+# ---------------------------------------------------------------------------
+# Attack / skill
+# ---------------------------------------------------------------------------
+func _use_skill(slot: int) -> void:
+	if not multiplayer.is_server():
 		return
-	if event.is_action_pressed("nextItem"):
-		_on_next_item()
-	elif event.is_action_pressed("previousItem"):
-		_on_previous_item()
+	var player_id := int(str(name))
+	var state := MatchState.get_state(player_id)
+	var skills_arr: Array = state.get("active_skills", ["", "", ""])
+	if slot >= skills_arr.size():
+		return
+	var skill_id: String = skills_arr[slot]
+	if skill_id == "":
+		_do_basic_attack()
+		return
+	# TODO: dispatch skill-specific logic based on skill_id
+	_do_basic_attack()
 
-func punchCheckCollision():
-	var id = multiplayer.get_unique_id()
-	if spawnsProjectile:
-		if str(id) == name:
-			var mousePos := get_global_mouse_position()
-			sendProjectile.rpc_id(1, mousePos)
+
+func _do_basic_attack() -> void:
+	var weapon_data := GameData.weapons.get(weapon_type, {})
+	if weapon_data.is_empty():
+		return
+	_attack_cooldown_remaining = weapon_data.get("cooldown", 0.6)
+	var attack_type: String = weapon_data.get("attack_type", "fan_aoe")
+	match attack_type:
+		"fan_aoe":
+			punchCheckCollision()
+		"linear_aoe":
+			punchCheckCollision()
+		"frontal_aoe":
+			punchCheckCollision()
+		"projectile":
+			var proj: String = weapon_data.get("projectile", "")
+			if proj != "" and str(int(str(name))) == str(multiplayer.get_unique_id()):
+				sendProjectile.rpc_id(1, get_global_mouse_position())
+
+
+func punchCheckCollision() -> void:
 	if !is_multiplayer_authority():
 		return
-	if equippedItem:
-		Inventory.useItemDurability(str(name), equippedItem)
+	var effective_damage := attackDamage * (1.0 + damage_bonus)
 	for body in %HitArea.get_overlapping_bodies():
 		if body != self and body.is_in_group("damageable"):
-			body.getDamage(self, attackDamage, damageType)
+			body.getDamage(self, effective_damage, "normal")
+
 
 @rpc("any_peer", "reliable")
-func sendProjectile(towards):
-	Items.spawnProjectile(self, spawnsProjectile, towards, "damageable")
+func sendProjectile(towards: Vector2) -> void:
+	var weapon_data := GameData.weapons.get(weapon_type, {})
+	var proj_id: String = weapon_data.get("projectile", "")
+	if proj_id != "":
+		GameData.spawn_projectile(self, proj_id, towards, "damageable")
 
-@rpc("authority", "call_local", "reliable")
-func increaseScore(by):
-	hp += by * 5
-	maxHP += by * 5
-	attackDamage += by
-	speed += by
-	Multihelper.spawnedPlayers[int(str(name))]["score"] += by
-	Multihelper.player_score_updated.emit()
 
-func objectDestroyed():
-	increaseScore.rpc(Constants.OBJECT_SCORE_GAIN)
-
-func mobKilled():
-	increaseScore.rpc(Constants.MOB_SCORE_GAIN)
-
-func enemyPlayerKilled():
-	increaseScore.rpc(Constants.PK_SCORE_GAIN)
-
-func getDamage(causer, amount, _type):
-	hp -= amount
-	if (hp - amount) <= 0 and causer.is_in_group("player"):
+# ---------------------------------------------------------------------------
+# Damage
+# ---------------------------------------------------------------------------
+func getDamage(causer: Node, amount: float, _type: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var reduced := amount * (1.0 - damage_reduction)
+	hp -= reduced
+	# Interrupt extraction if channeling
+	if _extraction_point_ref:
+		_extraction_point_ref.interrupt_player(int(str(name)))
+	# Interrupt revive if channeling
+	if _revive_channel and _revive_channel.is_active():
+		_revive_channel.cancel_channel()
+	if hp > 0.0 and causer.is_in_group("player"):
 		causer.player_killed.emit()
 
-func die():
-	if !multiplayer.is_server():
+
+# ---------------------------------------------------------------------------
+# Down state
+# ---------------------------------------------------------------------------
+func enter_downed_state() -> void:
+	if not multiplayer.is_server():
 		return
-	var peerId := int(str(name))
-	Multihelper._deregister_character.rpc(peerId)
-	dropInventory()
+	is_downed = true
+	_downed_timer = 0.0
+	_downed_hp = 100.0
+	_enter_downed.rpc()
+
+
+@rpc("authority", "call_local", "reliable")
+func _enter_downed.rpc() -> void:
+	is_downed = true
+	# TODO: play downed animation, show downed UI
+
+
+func _physics_process(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	if not is_downed:
+		return
+	_downed_timer += delta
+	_downed_hp = (1.0 - (_downed_timer / Constants.DOWN_DRAIN_TIME)) * 100.0
+	if _downed_hp <= 0.0:
+		die()
+
+
+func revive(healer: Node) -> void:
+	if not multiplayer.is_server():
+		return
+	if not is_downed:
+		return
+	is_downed = false
+	hp = maxHP * Constants.REVIVE_HP_PERCENT
+	_revived.rpc()
+	healer.mob_killed.emit()  # reward healer
+
+
+@rpc("authority", "call_local", "reliable")
+func _revived() -> void:
+	is_downed = false
+	# TODO: play revive animation, restore controls
+
+
+# ---------------------------------------------------------------------------
+# Death
+# ---------------------------------------------------------------------------
+func die() -> void:
+	if not multiplayer.is_server():
+		return
+	if _dying:
+		return
+	_dying = true
+	var peer_id := int(str(name))
+	MatchState.unregister_player(peer_id)
+	Multihelper._deregister_character.rpc(peer_id)
 	queue_free()
-	if peerId in multiplayer.get_peers():
-		Multihelper.showSpawnUI.rpc_id(peerId)
-		
-func dropInventory():
-	var inventoryDict = Inventory.inventories[name]
-	for item in inventoryDict.keys():
-		Items.spawnPickups(item, position, inventoryDict[item])
-	Inventory.inventories[name] = {}
-	Inventory.inventoryUpdated.emit(name)
-	Inventory.inventories.erase(name)
+	if peer_id in multiplayer.get_peers():
+		Multihelper.showSpawnUI.rpc_id(peer_id)
 
-@rpc("any_peer", "call_local", "reliable")
-func tryEquipItem(id):
-	if id in Inventory.inventories[name].keys():
-		equipItem.rpc(id)
 
-@rpc("any_peer", "call_local", "reliable")
-func equipItem(id):
-	equippedItem = id
-	%Hands.visible = false
-	%HeldItem.texture = load("res://assets/items/"+id+".png")
-	if multiplayer.is_server() and "scene" in Items.equips[id]:
-		for c in %Equipment.get_children():
-			c.queue_free()
-		var itemScene := load("res://scenes/character/equipments/"+Items.equips[id]["scene"]+".tscn")
-		var item = itemScene.instantiate()
-		%Equipment.add_child(item)
-		item.data = {"player": str(name), "item": id}
-
-@rpc("any_peer", "call_local", "reliable")
-func unequipItem():
-	equippedItem = ""
-	%Hands.visible = true
-	%HeldItem.texture = null
-	if multiplayer.is_server():
-		for c in %Equipment.get_children():
-			c.queue_free()
-
-func itemRemoved(id, item):
-	if !multiplayer.is_server():
+# ---------------------------------------------------------------------------
+# XP / level
+# ---------------------------------------------------------------------------
+func _on_mob_killed() -> void:
+	if not multiplayer.is_server():
 		return
-	if id == str(name) and item == equippedItem:
-		unequipItem.rpc()
+	MatchState.add_xp(int(str(name)), Constants.ENEMY_KILL_XP)
 
-func projectileHit(body):
-	body.getDamage(self, attackDamage, damageType)
+
+func _on_player_killed() -> void:
+	if not multiplayer.is_server():
+		return
+	MatchState.add_xp(int(str(name)), Constants.ENEMY_KILL_XP * 2)
+
+
+func _on_level_up(player_id: int, _new_level: int, options: Array) -> void:
+	if player_id != int(str(name)):
+		return
+	# Show skill picker UI
+	get_tree().get_first_node_in_group("skill_picker_ui").show_options(options)
+
+
+func _on_skill_applied(player_id: int, skill_id: String) -> void:
+	if player_id != int(str(name)):
+		return
+	var skill := GameData.skills.get(skill_id, {})
+	if skill.is_empty():
+		return
+	# Apply stat boosts immediately
+	var mods: Dictionary = skill.get("stat_mod", {})
+	if "max_hp" in mods:
+		maxHP += mods["max_hp"]
+		hp = minf(hp + mods["max_hp"], maxHP)
+	if "damage_reduction" in mods:
+		damage_reduction = minf(damage_reduction + mods["damage_reduction"], 0.9)
+	if "damage_bonus" in mods:
+		damage_bonus += mods["damage_bonus"]
+	if "speed_bonus" in mods:
+		speed *= (1.0 + mods["speed_bonus"])
+	# Sync active/passive skill slots from MatchState
+	var state := MatchState.get_state(int(str(name)))
+	if not state.is_empty():
+		active_skills = state.get("active_skills", active_skills)
+		passive_skills = state.get("passive_skills", passive_skills)
+
+
+# ---------------------------------------------------------------------------
+# Circle damage
+# ---------------------------------------------------------------------------
+func _on_circle_updated(center: Vector2, radius: float, damage_per_sec: float) -> void:
+	if not multiplayer.is_server():
+		return
+	if global_position.distance_to(center) > radius:
+		_circle_damage_accum += damage_per_sec * get_process_delta_time()
+		if _circle_damage_accum >= 1.0:
+			hp -= floor(_circle_damage_accum)
+			_circle_damage_accum -= floor(_circle_damage_accum)
+	else:
+		_circle_damage_accum = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Chat
+# ---------------------------------------------------------------------------
+@rpc("any_peer", "call_local", "reliable")
+func sendMessage(text: String) -> void:
+	if multiplayer.is_server():
+		var messageBoxScene := preload("res://scenes/ui/chat/message_box.tscn")
+		var messageBox := messageBoxScene.instantiate()
+		%PlayerMessages.add_child(messageBox, true)
+		messageBox.text = str(text)
+
+
+# ---------------------------------------------------------------------------
+# Misc
+# ---------------------------------------------------------------------------
+func visibilityFilter(id: int) -> bool:
+	return id != int(str(name))
+
+
+func _on_disconnected(id: int) -> void:
+	if str(id) == name:
+		die()
