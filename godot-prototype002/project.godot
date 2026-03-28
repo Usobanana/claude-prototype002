@@ -23,6 +23,8 @@ config/icon="res://icon.svg"
 
 Constants="*res://scenes/autoloads/Constants.gd"
 Multihelper="*res://scenes/autoloads/Multihelper.gd"
+Inventory="*res://scenes/autoloads/Inventory.gd"
+Items="*res://scenes/autoloads/Items.gd"
 GameData="*res://scenes/autoloads/GameData.gd"
 MatchState="*res://scenes/autoloads/MatchState.gd"
 MatchManager="*res://scenes/match/MatchManager.gd"

@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3 uid="uid://linear_attack_001"]
+
+[ext_resource type="Script" path="res://scenes/attacks/linear_attack.gd" id="1_linsc"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_lin01"]
+size = Vector2(30, 200)
+
+[node name="LinearAttack" type="Node2D"]
+script = ExtResource("1_linsc")
+
+[node name="HitArea" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitArea"]
+shape = SubResource("RectangleShape2D_lin01")

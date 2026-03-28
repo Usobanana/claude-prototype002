@@ -1,0 +1,18 @@
+[gd_scene load_steps=2 format=3 uid="uid://spectate_ctrl_001"]
+
+[ext_resource type="Script" path="res://scenes/ui/spectate/SpectateController.gd" id="1_spcsc"]
+
+[node name="SpectateController" type="CanvasLayer"]
+visible = false
+script = ExtResource("1_spcsc")
+
+[node name="SpectateCamera" type="Camera2D" parent="."]
+enabled = false
+
+[node name="WatchingLabel" type="Label" parent="."]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 400.0
+offset_bottom = 60.0
+text = "観戦中: -"
+theme_override_font_sizes/font_size = 24

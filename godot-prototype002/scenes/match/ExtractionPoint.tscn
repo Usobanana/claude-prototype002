@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://dfnpro7ui5lb"]
+
+[ext_resource type="Script" uid="uid://bdlmh8x30a4nj" path="res://scenes/match/ExtractionPoint.gd" id="1_jr26u"]
+[ext_resource type="Texture2D" uid="uid://b8l8ipb4edck1" path="res://icon.svg" id="2_jx6f7"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_2cs3g"]
+radius = 60.0
+
+[node name="ExtractionPoint" type="Area2D" unique_id=1533059303]
+script = ExtResource("1_jr26u")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=990415383]
+shape = SubResource("CircleShape2D_2cs3g")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=704863148]
+texture = ExtResource("2_jx6f7")
+
+[node name="Label" type="Label" parent="." unique_id=1939135035]
+offset_left = -36.0
+offset_top = -97.0
+offset_right = 34.0
+offset_bottom = -74.0
+text = "「F」で脱出"
