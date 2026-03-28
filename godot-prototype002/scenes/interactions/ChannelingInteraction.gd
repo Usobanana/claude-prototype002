@@ -1,4 +1,5 @@
 extends Node
+class_name ChannelingInteraction
 # Reusable channeling component.
 # Attach to any node that needs a timed-hold interaction (extraction, revive, finish-off).
 # The parent node drives start/cancel; this node tracks the timer and fires signals.

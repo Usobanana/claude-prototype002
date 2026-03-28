@@ -285,11 +285,11 @@ func enter_downed_state() -> void:
 	is_downed = true
 	_downed_timer = 0.0
 	_downed_hp = 100.0
-	_enter_downed.rpc()
+	_sync_downed.rpc()
 
 
 @rpc("authority", "call_local", "reliable")
-func _enter_downed.rpc() -> void:
+func _sync_downed() -> void:
 	is_downed = true
 	# TODO: play downed animation, show downed UI
 

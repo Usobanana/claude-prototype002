@@ -131,22 +131,45 @@ func loadMap():
 	map = main.get_node("Map")
 	map.generateMap()
 
-func requestSpawn(playerName, id, characterFile):
+func requestSpawn(playerName, id, characterFile, player_class := "warrior"):
 	player_info["name"] = playerName
 	player_info["body"] = characterFile
+	player_info["class"] = player_class
 	player_info["score"] = 0
 	spawnedPlayers[id] = player_info
 	_register_character.rpc(player_info)
-	spawnPlayer.rpc_id(1, playerName, id, characterFile)
+	spawnPlayer.rpc_id(1, playerName, id, characterFile, player_class)
 
 @rpc("any_peer", "call_local", "reliable")
-func spawnPlayer(playerName, id, characterFile):
+func spawnPlayer(playerName, id, characterFile, player_class := "warrior"):
 	var newPlayer := playerScenePath.instantiate()
 	newPlayer.playerName = playerName
 	newPlayer.characterFile = characterFile
+	newPlayer.player_class = player_class
 	newPlayer.name = str(id)
 	main.get_node("Players").add_child(newPlayer)
 	newPlayer.sendPos.rpc(map.tile_map.map_to_local(map.walkable_tiles.pick_random()))
+	# マッチ状態を初期化
+	if multiplayer.is_server():
+		MatchState.register_player(id, player_class)
+
+func player_extracted(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	MatchState.mark_extracted(peer_id)
+	_deregister_character.rpc(peer_id)
+	# プレイヤーノードを取得して削除
+	var player_node = main.get_node_or_null("Players/" + str(peer_id))
+	if player_node:
+		player_node.queue_free()
+	# クライアントに脱出成功を通知
+	if peer_id in multiplayer.get_peers():
+		show_extracted_screen.rpc_id(peer_id)
+
+@rpc("authority", "call_remote", "reliable")
+func show_extracted_screen():
+	# TODO: 脱出成功画面を表示
+	print("脱出成功！")
 
 @rpc("any_peer", "call_remote", "reliable")
 func showSpawnUI():
